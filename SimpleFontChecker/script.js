@@ -1,4 +1,7 @@
- 
+ /**
+  * done by titus^rabenauge
+  */
+
 class calcTile {
     columns = 0;
     rows = 0;
