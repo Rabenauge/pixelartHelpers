@@ -2,8 +2,10 @@
 small scripts and tools to help with my pixelart projects
 
 ## SimpleFontChecker
-This is a small n simple JavaScript to check how a bitmap font looks "in real" on char next to each other - even if you are pixeling a font, you may have some issues to check one char against other bitmap chars.
-No realwords, this is just a random mapping of chars - to see maybe some drawing issues. And some programmers always tend do have there own love for which orders font should be - so no need to give a char order to keep this test flexible ;).
+This is a small and simple JavaScript Tool to check how a bitmap font looks "in real" with one char next to each other.
+It doesn´t generate real words, this is just a random mapping of chars - to see maybe some drawing issues. 
+And some programmers always tend do have their own love for which orders chars in font should be - so no need to give a char order to keep this test as simple n flexible possible ;).
+
 So this loads a img with the bitmap font - (in this example just font.png) and checks for 5 
 variables in the script.js file:
 ```
