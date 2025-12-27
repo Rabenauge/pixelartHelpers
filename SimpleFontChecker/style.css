@@ -6,16 +6,307 @@
 
 body {
  background: black;
+ color: white;
+ font-family: Arial, sans-serif;
+ font-size: 12px;
+}
+
+.ticker-line {
+  border: 1px solid white;
+  overflow: hidden;
+  white-space: nowrap;
+  height: var(--ticker-height, auto);
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+}
+
+.ticker-track {
+  display: inline-block;
+}
+
+.ticker-animate {
+  animation: ticker-scroll 18s linear infinite;
+}
+
+.ticker-canvas {
+  display: block;
+}
+
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
+.layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 24px;
+  flex-wrap: nowrap;
+}
+
+.display-area {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.display-nav {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  flex-basis: 100%;
+  order: -1;
+  align-items: center;
+}
+
+.display-area.preview-right {
+  flex-direction: row;
+}
+
+.display-area.preview-below {
+  flex-direction: column;
+}
+
+.list-view {
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.list-view.active {
+  display: flex;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.list-col {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.list-row canvas {
+  image-rendering: pixelated;
+  border: 1px solid white;
+}
+
+.list-row button {
+  padding: 4px 8px;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: 320px;
+  flex: 0 0 auto;
+}
+
+.preview {
+  position: relative;
+  border: 1px solid white;
+  padding: 6px;
+  max-height: 320px;
+  max-width: 320px;
+  overflow: hidden;
+}
+
+.display-area.zoomed .preview {
+  order: 10;
+  width: 100%;
+}
+
+.selection-box {
+  position: absolute;
+  border: 1px dashed white;
+  display: none;
+  cursor: move;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field input {
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
+.field select {
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
+.view-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.view-tab {
+  flex: 1;
+  border: 1px solid white;
+  background: transparent;
+  color: white;
+  font-size: 12px;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+.view-tab:hover,
+.view-tab:focus-visible {
+  background: #1b1b1b;
+}
+
+.view-tab.active {
+  background: white;
+  color: black;
+}
+
+.preview-switcher {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.preview-switcher label {
+  font-size: 12px;
+}
+
+.preview-ticker {
+  display: none;
+  width: 100%;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cross-field {
+  gap: 8px;
+}
+
+.cross-grid {
+  display: grid;
+  grid-template-columns: 48px 48px 48px;
+  grid-template-rows: 22px 22px 22px;
+  grid-template-areas:
+    ". top ."
+    "left center right"
+    ". bottom .";
+  align-items: center;
+  justify-items: center;
+  gap: 4px;
+}
+
+.cross-grid input {
+  width: 48px;
+  padding: 2px 4px;
+}
+
+.cross-top {
+  grid-area: top;
+}
+
+.cross-left {
+  grid-area: left;
+}
+
+.cross-right {
+  grid-area: right;
+}
+
+.cross-bottom {
+  grid-area: bottom;
+}
+
+.cross-center {
+  grid-area: center;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.checkbox-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-field input {
+  width: auto;
+  padding: 0;
+}
+
+.zoom-field {
+  flex-direction: row;
+  gap: 8px;
+}
+
+.zoom-field button {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.help-view {
+  display: none;
+  border: 1px solid white;
+  padding: 12px;
+  max-width: 520px;
+}
+
+.help-view h2 {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.help-view ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.help-view li {
+  line-height: 1.4;
+}
+
+#saveSettings,
+#loadSettings {
+  padding: 4px 8px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+#tickerToggle {
+  padding: 6px 10px;
 }
 
 #canvas {
   border: 3px solid white;
-  top: 50%;
-  left: 50%;
-  position: absolute;
-  transform: translate(-50%,-50%);
 }
 
 img {
-  /* display: none; */
+  max-width: 100%;
+  max-height: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  cursor: crosshair;
+}
+
+label {
+  font-size: 14px;
 }

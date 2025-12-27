@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -7,10 +8,148 @@
   <title>font checker 001</title>
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
-  <img id="source" src="font.png"/>
-  <canvas id="canvas"></canvas>
-  
+  <div class="layout">
+    <div class="panel">
+      <div class="field">
+        <label for="fileInput">PNG File</label>
+        <input id="fileInput" type="file" accept="image/png" />
+      </div>
+      <div class="field zoom-field">
+        <button id="zoomOut" type="button">Zoom -</button>
+        <button id="zoomReset" type="button">Reset</button>
+        <button id="zoomIn" type="button">Zoom +</button>
+      </div>
+      <div class="field">
+        <button id="tickerToggle" type="button">Start Scroller</button>
+      </div>
+      <div class="field cross-field">
+        <label>Frame</label>
+        <div class="cross-grid">
+          <input id="rahmenTop" class="cross-top" type="number" min="0" step="1" maxlength="4" placeholder="Top"
+            aria-label="Frame Top" />
+          <input id="rahmenLeft" class="cross-left" type="number" min="0" step="1" maxlength="4" placeholder="Left"
+            aria-label="Frame Left" />
+          <div class="cross-center">Frame</div>
+          <input id="rahmenRight" class="cross-right" type="number" min="0" step="1" maxlength="4" placeholder="Right"
+            aria-label="Frame Right" />
+          <input id="rahmenBottom" class="cross-bottom" type="number" min="0" step="1" maxlength="4"
+            placeholder="Bottom" aria-label="Frame Bottom" />
+        </div>
+      </div>
+      <div class="field cross-field">
+        <label>Gap</label>
+        <div class="cross-grid">
+          <input id="gapTop" class="cross-top" type="number" min="0" step="1" maxlength="4" placeholder="Top"
+            aria-label="Gap Top" />
+          <input id="gapLeft" class="cross-left" type="number" min="0" step="1" maxlength="4" placeholder="Left"
+            aria-label="Gap Left" />
+          <div class="cross-center">Gap</div>
+          <input id="gapRight" class="cross-right" type="number" min="0" step="1" maxlength="4" placeholder="Right"
+            aria-label="Gap Right" />
+          <input id="gapBottom" class="cross-bottom" type="number" min="0" step="1" maxlength="4" placeholder="Bottom"
+            aria-label="Gap Bottom" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="canvasW">Canvas Width</label>
+        <input id="canvasW" type="number" min="1" step="1" maxlength="4" />
+      </div>
+      <div class="field">
+        <label for="canvasH">Canvas Height</label>
+        <input id="canvasH" type="number" min="1" step="1" maxlength="4" />
+      </div>
+      <div class="field">
+        <label for="gridW">Grid Width</label>
+        <input id="gridW" type="number" min="1" step="1" maxlength="4" />
+      </div>
+      <div class="field">
+        <label for="gridH">Grid Height</label>
+        <input id="gridH" type="number" min="1" step="1" maxlength="4" />
+      </div>
+      <div class="field">
+        <label for="tileLimit">Tile Limit</label>
+        <input id="tileLimit" type="number" min="0" step="1" maxlength="4" />
+      </div>
+      <div class="field">
+        <label for="ignoreChars">Ignore Chars</label>
+        <input id="ignoreChars" type="text" placeholder="0,3,4,5" />
+      </div>
+      <div class="field">
+        <button id="saveSettings" type="button">Save Settings</button>
+        <button id="loadSettings" type="button">Load Settings</button>
+        <input id="loadSettingsInput" type="file" accept=".set,application/json" hidden />
+      </div>
+    </div>
+    <div id="displayArea" class="display-area">
+      <div class="display-nav">
+        <button type="button" class="view-tab active" data-view-tab data-view="list">Character List</button>
+        <button type="button" class="view-tab" data-view-tab data-view="preview">Preview</button>
+        <button type="button" class="view-tab" data-view-tab data-view="help">Help</button>
+      </div>
+      <div id="listView" class="list-view"></div>
+      <div id="previewSwitcher" class="preview-switcher">
+        <label for="previewMode">Preview View</label>
+        <select id="previewMode">
+          <option value="font-block">font block</option>
+          <option value="scrollers">scrollers</option>
+        </select>
+      </div>
+      <canvas id="canvas"></canvas>
+      <div id="previewTicker" class="preview-ticker">
+        <div class="ticker-line">
+          <div class="ticker-track ticker-animate" data-speed="7">
+            <canvas class="ticker-canvas"></canvas>
+          </div>
+        </div>
+        <div class="ticker-line">
+          <div class="ticker-track ticker-animate" data-speed="10">
+            <canvas class="ticker-canvas"></canvas>
+          </div>
+        </div>
+        <div class="ticker-line">
+          <div class="ticker-track ticker-animate" data-speed="2.8">
+            <canvas class="ticker-canvas"></canvas>
+          </div>
+        </div>
+        <div class="ticker-line">
+          <div class="ticker-track ticker-animate" data-speed="1.4">
+            <canvas class="ticker-canvas"></canvas>
+          </div>
+        </div>
+        <div class="ticker-line">
+          <div class="ticker-track ticker-animate" data-speed="2">
+            <canvas class="ticker-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="preview">
+        <div id="selectionBox" class="selection-box"></div>
+        <img id="source" src="font.png" />
+      </div>
+      <div id="helpView" class="help-view">
+        <h2>Help</h2>
+        <ul>
+          <li><strong>Select View:</strong> Switch between Character List, Preview, and Help.</li>
+          <li><strong>Preview View:</strong> Choose between font block and scrollers in the Preview tab.</li>
+          <li><strong>PNG File:</strong> Load a font sprite sheet in PNG format.</li>
+          <li><strong>Zoom:</strong> Scale the Character List and ticker tiles.</li>
+          <li><strong>Start Scroller:</strong> Toggle the ticker animation when Preview is set to scrollers.</li>
+          <li><strong>Frame:</strong> Outer padding of the sprite sheet before tiles start.</li>
+          <li><strong>Gap:</strong> Spacing between tiles inside the sprite sheet.</li>
+          <li><strong>Canvas Width/Height:</strong> Size of the random preview canvas.</li>
+          <li><strong>Grid Width/Height:</strong> Size of a single tile in pixels.</li>
+          <li><strong>Tile Limit:</strong> Limit how many tiles are shown/used (0 = no limit).</li>
+          <li><strong>Ignore Chars:</strong> Comma-separated tile indices to skip.</li>
+          <li><strong>Save/Load Settings:</strong> Store or restore your current setup.</li>
+          <li><strong>Selection:</strong> In Character List view, click the image to set the grid box and use arrows to nudge it.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <script src="script.js"></script>
 </body>
+
 </html>
