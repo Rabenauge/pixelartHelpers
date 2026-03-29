@@ -118,21 +118,198 @@ body {
   position: relative;
   border: 1px solid white;
   padding: 6px;
-  max-height: 320px;
-  max-width: 320px;
-  overflow: hidden;
+  max-width: 420px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .display-area.zoomed .preview {
   order: 10;
-  width: 100%;
+  max-width: none;
+}
+
+.preview-info,
+.inspector-status {
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.85;
+}
+
+.inspector-viewport {
+  position: relative;
+  max-width: min(70vw, 400px);
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.04) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.04) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+.display-area.zoomed .inspector-viewport {
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+}
+
+.inspector-surface {
+  position: relative;
+  width: fit-content;
+  min-width: 100%;
+}
+
+.grid-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.offset-overlay {
+  position: absolute;
+  display: none;
+  border: 1px solid transparent;
+  pointer-events: auto;
+}
+
+.offset-overlay.is-active {
+  display: block;
+}
+
+.offset-overlay.is-dragging {
+  filter: brightness(1.1);
+}
+
+.frame-overlay {
+  background: rgba(255, 102, 102, 0.2);
+  border-color: rgba(255, 120, 120, 0.75);
+}
+
+.frame-top { background: rgba(255, 92, 92, 0.18); }
+.frame-right { background: rgba(255, 112, 112, 0.2); }
+.frame-bottom { background: rgba(255, 132, 132, 0.2); }
+.frame-left { background: rgba(255, 82, 82, 0.2); }
+
+.gap-overlay {
+  background: rgba(92, 158, 255, 0.22);
+  border-color: rgba(116, 182, 255, 0.8);
+}
+
+.gap-top { background: rgba(72, 142, 255, 0.2); }
+.gap-right { background: rgba(92, 162, 255, 0.22); }
+.gap-bottom { background: rgba(112, 182, 255, 0.22); }
+.gap-left { background: rgba(62, 132, 255, 0.22); }
+
+.frame-top,
+.frame-bottom,
+.gap-top,
+.gap-bottom {
+  cursor: ns-resize;
+}
+
+.frame-left,
+.frame-right,
+.gap-left,
+.gap-right {
+  cursor: ew-resize;
 }
 
 .selection-box {
   position: absolute;
-  border: 1px dashed white;
+  border: 1px solid #7dff9b;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.18);
+  background: rgba(125, 255, 155, 0.08);
   display: none;
-  cursor: move;
+  cursor: grab;
+}
+
+.selection-box.is-dragging {
+  cursor: grabbing;
+}
+
+.selection-box.is-resizing {
+  cursor: default;
+}
+
+.resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1px solid #0d1b12;
+  background: #7dff9b;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.handle-n,
+.handle-s {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.handle-e,
+.handle-w {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.handle-n,
+.handle-ne,
+.handle-nw {
+  top: -6px;
+}
+
+.handle-s,
+.handle-se,
+.handle-sw {
+  bottom: -6px;
+}
+
+.handle-e,
+.handle-ne,
+.handle-se {
+  right: -6px;
+}
+
+.handle-w,
+.handle-nw,
+.handle-sw {
+  left: -6px;
+}
+
+.handle-n { cursor: ns-resize; }
+.handle-ne { cursor: nesw-resize; }
+.handle-e { cursor: ew-resize; }
+.handle-se { cursor: nwse-resize; }
+.handle-s { cursor: ns-resize; }
+.handle-sw { cursor: nesw-resize; }
+.handle-w { cursor: ew-resize; }
+.handle-nw { cursor: nwse-resize; }
+
+.drag-box {
+  position: absolute;
+  border: 1px dashed #ffd166;
+  background: rgba(255, 209, 102, 0.12);
+  display: none;
+  pointer-events: none;
+}
+
+.hover-tooltip {
+  position: absolute;
+  max-width: 220px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(8, 8, 8, 0.9);
+  color: white;
+  font-size: 11px;
+  line-height: 1.35;
+  pointer-events: none;
+  display: none;
+  z-index: 20;
 }
 
 .field {
@@ -299,12 +476,12 @@ body {
 }
 
 img {
-  max-width: 100%;
-  max-height: 100%;
+  max-width: none;
+  max-height: none;
   height: auto;
   display: block;
-  object-fit: contain;
   cursor: crosshair;
+  image-rendering: pixelated;
 }
 
 label {

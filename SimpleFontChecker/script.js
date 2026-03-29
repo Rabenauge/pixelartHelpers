@@ -148,7 +148,21 @@ const zoomInButton = document.getElementById('zoomIn');
 const previewModeSelect = document.getElementById('previewMode');
 const previewSwitcher = document.getElementById('previewSwitcher');
 const previewWrapper = document.querySelector('.preview');
+const inspectorViewport = document.getElementById('inspectorViewport');
+const inspectorSurface = document.getElementById('inspectorSurface');
+const gridOverlay = document.getElementById('gridOverlay');
+const frameTopOverlay = document.getElementById('frameTopOverlay');
+const frameRightOverlay = document.getElementById('frameRightOverlay');
+const frameBottomOverlay = document.getElementById('frameBottomOverlay');
+const frameLeftOverlay = document.getElementById('frameLeftOverlay');
+const gapTopOverlay = document.getElementById('gapTopOverlay');
+const gapRightOverlay = document.getElementById('gapRightOverlay');
+const gapBottomOverlay = document.getElementById('gapBottomOverlay');
+const gapLeftOverlay = document.getElementById('gapLeftOverlay');
 const selectionBox = document.getElementById('selectionBox');
+const dragBox = document.getElementById('dragBox');
+const hoverTooltip = document.getElementById('hoverTooltip');
+const inspectorStatus = document.getElementById('inspectorStatus');
 const listView = document.getElementById('listView');
 const helpView = document.getElementById('helpView');
 const previewTicker = document.getElementById('previewTicker');
@@ -177,6 +191,7 @@ const numberFields = [
     { key: 'gapTop', input: gapTopInput, allowBlankZero: true },
     { key: 'gapBottom', input: gapBottomInput, allowBlankZero: true }
 ];
+const numberFieldMap = new Map(numberFields.map((field) => [field.key, field.input]));
 
 function getViewMode() {
     const activeTab = Array.from(viewTabs).find((tab) => tab.classList.contains('active'));
@@ -344,7 +359,6 @@ function scheduleRender(shouldUpdateTicker) {
         renderScheduled = false;
         renderFontPreview(renderShouldUpdateTicker);
         applyZoom();
-        updateSelectionBoxFromOrigin();
         renderShouldUpdateTicker = false;
     });
 }
@@ -383,6 +397,7 @@ function applyZoom() {
             canvas.style.imageRendering = 'pixelated';
         });
     }
+    refreshInspector();
     updateTickerHeight();
     if (config.tickerRunning) {
         updateTickerSpeed();
@@ -390,7 +405,7 @@ function applyZoom() {
 }
 
 function updateZoom(delta) {
-    config.zoom = Math.min(4, Math.max(1, config.zoom + delta));
+    config.zoom = Math.min(8, Math.max(1, Number((config.zoom + delta).toFixed(2))));
     applyZoom();
 }
 
@@ -454,149 +469,514 @@ function renderListView() {
     listView.appendChild(fragment);
 }
 
-let isSelecting = false;
 let selectionStart = null;
-let isDraggingOverlay = false;
+let activePointerMode = null;
 let dragOffset = null;
-let overlayOrigin = { x: 0, y: 0 };
-const OVERLAY_NUDGE_Y = -1;
+let resizeState = null;
+let overlayAdjustState = null;
+let tooltipTimer = null;
+const MIN_SELECTION_PIXELS = 2;
+const tooltipDescriptions = {
+    'frame-top': 'Frame top: outer padding above the first tile row. Drag vertically to change it.',
+    'frame-right': 'Frame right: outer padding on the right image edge. Drag horizontally to change it.',
+    'frame-bottom': 'Frame bottom: outer padding below the last tile row. Drag vertically to change it.',
+    'frame-left': 'Frame left: outer padding before the first tile column. Drag horizontally to change it.',
+    'gap-top': 'Gap top: vertical spacing before each tile area. Drag vertically to change it.',
+    'gap-right': 'Gap right: horizontal spacing after each tile area. Drag horizontally to change it.',
+    'gap-bottom': 'Gap bottom: vertical spacing after each tile area. Drag vertically to change it.',
+    'gap-left': 'Gap left: horizontal spacing before each tile area. Drag horizontally to change it.'
+};
+const offsetOverlays = [
+    { element: frameTopOverlay, kind: 'frame', side: 'top' },
+    { element: frameRightOverlay, kind: 'frame', side: 'right' },
+    { element: frameBottomOverlay, kind: 'frame', side: 'bottom' },
+    { element: frameLeftOverlay, kind: 'frame', side: 'left' },
+    { element: gapTopOverlay, kind: 'gap', side: 'top' },
+    { element: gapRightOverlay, kind: 'gap', side: 'right' },
+    { element: gapBottomOverlay, kind: 'gap', side: 'bottom' },
+    { element: gapLeftOverlay, kind: 'gap', side: 'left' }
+];
+
+function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+}
+
+function setFieldValue(key, value) {
+    config[key] = value;
+    const input = numberFieldMap.get(key);
+    if (input) {
+        input.value = String(value);
+    }
+}
+
+function getTileOrigin() {
+    return {
+        x: config.rahmenLeft + config.gapLeft,
+        y: config.rahmenTop + config.gapTop
+    };
+}
+
+function getSelectionBounds() {
+    const origin = getTileOrigin();
+    return {
+        left: origin.x,
+        top: origin.y,
+        width: config.gridW,
+        height: config.gridH
+    };
+}
+
+function getSelectionEdges() {
+    const bounds = getSelectionBounds();
+    return {
+        left: bounds.left,
+        top: bounds.top,
+        right: bounds.left + bounds.width,
+        bottom: bounds.top + bounds.height
+    };
+}
+
+function getOverlayValue(kind, side) {
+    const key = `${kind === 'frame' ? 'rahmen' : 'gap'}${side.charAt(0).toUpperCase()}${side.slice(1)}`;
+    return config[key];
+}
+
+function setOverlayValue(kind, side, value) {
+    const key = `${kind === 'frame' ? 'rahmen' : 'gap'}${side.charAt(0).toUpperCase()}${side.slice(1)}`;
+    setFieldValue(key, value);
+}
+
+function getOverlayLimit(kind, side) {
+    if (!sourcePreview) {
+        return 0;
+    }
+    const widthLimit = Math.max(0, sourcePreview.naturalWidth - config.gridW);
+    const heightLimit = Math.max(0, sourcePreview.naturalHeight - config.gridH);
+    if (kind === 'frame') {
+        if (side === 'left') {
+            return Math.max(0, sourcePreview.naturalWidth - config.gapLeft - config.gridW);
+        }
+        if (side === 'right') {
+            return Math.max(0, sourcePreview.naturalWidth - config.rahmenLeft - config.gapLeft - config.gridW);
+        }
+        if (side === 'top') {
+            return Math.max(0, sourcePreview.naturalHeight - config.gapTop - config.gridH);
+        }
+        if (side === 'bottom') {
+            return Math.max(0, sourcePreview.naturalHeight - config.rahmenTop - config.gapTop - config.gridH);
+        }
+    }
+    if (side === 'left') {
+        return widthLimit - config.rahmenLeft;
+    }
+    if (side === 'right') {
+        return Math.max(0, sourcePreview.naturalWidth - config.rahmenLeft - config.gapLeft - config.gridW);
+    }
+    if (side === 'top') {
+        return heightLimit - config.rahmenTop;
+    }
+    return Math.max(0, sourcePreview.naturalHeight - config.rahmenTop - config.gapTop - config.gridH);
+}
+
+function setOverlayRect(element, left, top, width, height, isVisible) {
+    if (!element) {
+        return;
+    }
+    if (!isVisible || width <= 0 || height <= 0) {
+        element.classList.remove('is-active');
+        element.style.display = 'none';
+        return;
+    }
+    element.style.left = `${Math.round(left * config.zoom)}px`;
+    element.style.top = `${Math.round(top * config.zoom)}px`;
+    element.style.width = `${Math.max(1, Math.round(width * config.zoom))}px`;
+    element.style.height = `${Math.max(1, Math.round(height * config.zoom))}px`;
+    element.style.display = 'block';
+    element.classList.add('is-active');
+}
+
+function updateOffsetOverlays() {
+    if (!sourcePreview || !sourcePreview.naturalWidth || !sourcePreview.naturalHeight) {
+        return;
+    }
+    const bounds = getSelectionBounds();
+    setOverlayRect(frameLeftOverlay, 0, bounds.top, config.rahmenLeft, bounds.height, config.rahmenLeft > 0);
+    setOverlayRect(frameRightOverlay, Math.max(0, sourcePreview.naturalWidth - config.rahmenRight), bounds.top, config.rahmenRight, bounds.height, config.rahmenRight > 0);
+    setOverlayRect(frameTopOverlay, bounds.left, 0, bounds.width, config.rahmenTop, config.rahmenTop > 0);
+    setOverlayRect(frameBottomOverlay, bounds.left, Math.max(0, sourcePreview.naturalHeight - config.rahmenBottom), bounds.width, config.rahmenBottom, config.rahmenBottom > 0);
+    setOverlayRect(gapLeftOverlay, Math.max(0, bounds.left - config.gapLeft), bounds.top, config.gapLeft, bounds.height, config.gapLeft > 0);
+    setOverlayRect(gapRightOverlay, bounds.left + bounds.width, bounds.top, config.gapRight, bounds.height, config.gapRight > 0);
+    setOverlayRect(gapTopOverlay, bounds.left, Math.max(0, bounds.top - config.gapTop), bounds.width, config.gapTop, config.gapTop > 0);
+    setOverlayRect(gapBottomOverlay, bounds.left, bounds.top + bounds.height, bounds.width, config.gapBottom, config.gapBottom > 0);
+}
+
+function showHoverTooltip(event, key) {
+    if (!hoverTooltip) {
+        return;
+    }
+    if (tooltipTimer) {
+        window.clearTimeout(tooltipTimer);
+    }
+    hoverTooltip.textContent = tooltipDescriptions[key] || '';
+    hoverTooltip.style.left = `${Math.round(event.offsetX + 12)}px`;
+    hoverTooltip.style.top = `${Math.round(event.offsetY + 12)}px`;
+    hoverTooltip.style.display = 'block';
+    tooltipTimer = window.setTimeout(function () {
+        if (hoverTooltip) {
+            hoverTooltip.style.display = 'none';
+        }
+    }, 2600);
+}
+
+function hideHoverTooltip() {
+    if (!hoverTooltip) {
+        return;
+    }
+    if (tooltipTimer) {
+        window.clearTimeout(tooltipTimer);
+        tooltipTimer = null;
+    }
+    hoverTooltip.style.display = 'none';
+}
+
+function syncInspectorSurface() {
+    if (!inspectorSurface || !sourcePreview || !sourcePreview.naturalWidth || !sourcePreview.naturalHeight) {
+        return;
+    }
+    const scaledWidth = Math.max(1, Math.round(sourcePreview.naturalWidth * config.zoom));
+    const scaledHeight = Math.max(1, Math.round(sourcePreview.naturalHeight * config.zoom));
+    inspectorSurface.style.width = `${scaledWidth}px`;
+    inspectorSurface.style.height = `${scaledHeight}px`;
+    sourcePreview.style.width = `${scaledWidth}px`;
+    sourcePreview.style.height = `${scaledHeight}px`;
+}
 
 function getImagePoint(event) {
-    if (!sourcePreview) {
+    if (!sourcePreview || !inspectorSurface) {
         return null;
     }
-    const rect = sourcePreview.getBoundingClientRect();
+    const rect = inspectorSurface.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) {
         return null;
     }
-    const x = Math.min(Math.max(event.clientX - rect.left, 0), rect.width);
-    const y = Math.min(Math.max(event.clientY - rect.top, 0), rect.height);
-    return { x, y, rect };
+    const scaledX = clamp(event.clientX - rect.left, 0, rect.width);
+    const scaledY = clamp(event.clientY - rect.top, 0, rect.height);
+    const naturalX = clamp(scaledX / config.zoom, 0, sourcePreview.naturalWidth);
+    const naturalY = clamp(scaledY / config.zoom, 0, sourcePreview.naturalHeight);
+    return {
+        scaledX,
+        scaledY,
+        naturalX,
+        naturalY,
+        rect
+    };
 }
 
-function updateSelectionBox(start, end) {
-    if (!selectionBox || !previewWrapper || !sourcePreview) {
+function updateDragBox(startPoint, endPoint) {
+    if (!dragBox) {
         return;
     }
-    const wrapperRect = previewWrapper.getBoundingClientRect();
-    const imgRect = sourcePreview.getBoundingClientRect();
-    const offsetX = imgRect.left - wrapperRect.left;
-    const offsetY = imgRect.top - wrapperRect.top;
-    const left = Math.min(start.x, end.x);
-    const top = Math.min(start.y, end.y);
-    const width = Math.abs(end.x - start.x);
-    const height = Math.abs(end.y - start.y);
-    selectionBox.style.left = `${offsetX + left}px`;
-    selectionBox.style.top = `${offsetY + top + OVERLAY_NUDGE_Y}px`;
-    selectionBox.style.width = `${width}px`;
-    selectionBox.style.height = `${height}px`;
+    const left = Math.min(startPoint.scaledX, endPoint.scaledX);
+    const top = Math.min(startPoint.scaledY, endPoint.scaledY);
+    const width = Math.abs(endPoint.scaledX - startPoint.scaledX);
+    const height = Math.abs(endPoint.scaledY - startPoint.scaledY);
+    dragBox.style.left = `${left}px`;
+    dragBox.style.top = `${top}px`;
+    dragBox.style.width = `${width}px`;
+    dragBox.style.height = `${height}px`;
+    dragBox.style.display = 'block';
 }
 
-function updateSelectionBoxFromOrigin() {
-    if (!selectionBox || !previewWrapper || !sourcePreview) {
+function updateInspectorStatus() {
+    if (!inspectorStatus || !sourcePreview) {
         return;
     }
-    const wrapperRect = previewWrapper.getBoundingClientRect();
-    const imgRect = sourcePreview.getBoundingClientRect();
-    const offsetX = imgRect.left - wrapperRect.left;
-    const offsetY = imgRect.top - wrapperRect.top;
-    const scaleX = imgRect.width > 0 ? imgRect.width / sourcePreview.naturalWidth : 1;
-    const scaleY = imgRect.height > 0 ? imgRect.height / sourcePreview.naturalHeight : 1;
-    const gapX = config.gapLeft + config.gapRight;
-    const gapY = config.gapTop + config.gapBottom;
-    const left = overlayOrigin.x - config.gapLeft;
-    const top = overlayOrigin.y - config.gapTop;
-    selectionBox.style.left = `${offsetX + left * scaleX}px`;
-    selectionBox.style.top = `${offsetY + top * scaleY + OVERLAY_NUDGE_Y}px`;
-    selectionBox.style.width = `${(config.gridW + gapX) * scaleX}px`;
-    selectionBox.style.height = `${(config.gridH + gapY) * scaleY}px`;
+    const origin = getTileOrigin();
+    inspectorStatus.textContent = `Zoom ${Math.round(config.zoom * 100)}% | tile ${config.gridW}x${config.gridH} | first tile ${origin.x},${origin.y} | frame ${config.rahmenLeft},${config.rahmenTop} | gap ${config.gapLeft}/${config.gapRight}/${config.gapTop}/${config.gapBottom}`;
+}
+
+function updateSelectionBoxFromConfig() {
+    if (!selectionBox || !sourcePreview || !sourcePreview.naturalWidth || !sourcePreview.naturalHeight) {
+        return;
+    }
+    const bounds = getSelectionBounds();
+    selectionBox.style.left = `${Math.round(bounds.left * config.zoom)}px`;
+    selectionBox.style.top = `${Math.round(bounds.top * config.zoom)}px`;
+    selectionBox.style.width = `${Math.max(1, Math.round(bounds.width * config.zoom))}px`;
+    selectionBox.style.height = `${Math.max(1, Math.round(bounds.height * config.zoom))}px`;
     selectionBox.style.display = 'block';
+    updateOffsetOverlays();
+    updateInspectorStatus();
+}
+
+function drawGridOverlay() {
+    if (!gridOverlay || !sourcePreview || !sourcePreview.naturalWidth || !sourcePreview.naturalHeight) {
+        return;
+    }
+    const scaledWidth = Math.max(1, Math.round(sourcePreview.naturalWidth * config.zoom));
+    const scaledHeight = Math.max(1, Math.round(sourcePreview.naturalHeight * config.zoom));
+    gridOverlay.width = scaledWidth;
+    gridOverlay.height = scaledHeight;
+    gridOverlay.style.width = `${scaledWidth}px`;
+    gridOverlay.style.height = `${scaledHeight}px`;
+    const overlayCtx = gridOverlay.getContext('2d');
+    if (!overlayCtx) {
+        return;
+    }
+    overlayCtx.clearRect(0, 0, scaledWidth, scaledHeight);
+    if (config.gridW <= 0 || config.gridH <= 0) {
+        return;
+    }
+    const calc = new CalcTile();
+    calc.calcRowAndColumns(
+        sourcePreview.naturalWidth,
+        sourcePreview.naturalHeight,
+        config.gridW,
+        config.gridH,
+        config.rahmenLeft,
+        config.rahmenRight,
+        config.rahmenTop,
+        config.rahmenBottom,
+        config.gapLeft,
+        config.gapRight,
+        config.gapTop,
+        config.gapBottom
+    );
+    overlayCtx.strokeStyle = 'rgba(125, 255, 155, 0.42)';
+    overlayCtx.lineWidth = 1;
+    for (let row = 0; row < calc.rows; row++) {
+        for (let col = 0; col < calc.columns; col++) {
+            const srcX = config.rahmenLeft + config.gapLeft + col * (config.gridW + config.gapLeft + config.gapRight);
+            const srcY = config.rahmenTop + config.gapTop + row * (config.gridH + config.gapTop + config.gapBottom);
+            const x = Math.round(srcX * config.zoom) + 0.5;
+            const y = Math.round(srcY * config.zoom) + 0.5;
+            const width = Math.max(1, Math.round(config.gridW * config.zoom) - 1);
+            const height = Math.max(1, Math.round(config.gridH * config.zoom) - 1);
+            overlayCtx.strokeRect(x, y, width, height);
+        }
+    }
+}
+
+function refreshInspector() {
+    syncInspectorSurface();
+    drawGridOverlay();
+    updateSelectionBoxFromConfig();
+}
+
+function scrollSelectionIntoView() {
+    if (!inspectorViewport || !selectionBox) {
+        return;
+    }
+    const left = selectionBox.offsetLeft;
+    const top = selectionBox.offsetTop;
+    const right = left + selectionBox.offsetWidth;
+    const bottom = top + selectionBox.offsetHeight;
+    if (left < inspectorViewport.scrollLeft) {
+        inspectorViewport.scrollLeft = left;
+    } else if (right > inspectorViewport.scrollLeft + inspectorViewport.clientWidth) {
+        inspectorViewport.scrollLeft = right - inspectorViewport.clientWidth;
+    }
+    if (top < inspectorViewport.scrollTop) {
+        inspectorViewport.scrollTop = top;
+    } else if (bottom > inspectorViewport.scrollTop + inspectorViewport.clientHeight) {
+        inspectorViewport.scrollTop = bottom - inspectorViewport.clientHeight;
+    }
+}
+
+function applySelectionRect(left, top, width, height) {
+    if (!sourcePreview) {
+        return;
+    }
+    const nextLeft = clamp(Math.round(left), 0, Math.max(0, sourcePreview.naturalWidth - 1));
+    const nextTop = clamp(Math.round(top), 0, Math.max(0, sourcePreview.naturalHeight - 1));
+    const maxWidth = Math.max(1, sourcePreview.naturalWidth - nextLeft);
+    const maxHeight = Math.max(1, sourcePreview.naturalHeight - nextTop);
+    const nextWidth = clamp(Math.round(width), 1, maxWidth);
+    const nextHeight = clamp(Math.round(height), 1, maxHeight);
+    setFieldValue('gridW', nextWidth);
+    setFieldValue('gridH', nextHeight);
+    setFieldValue('rahmenLeft', Math.max(0, nextLeft - config.gapLeft));
+    setFieldValue('rahmenTop', Math.max(0, nextTop - config.gapTop));
+    scheduleRender(true);
+    requestAnimationFrame(scrollSelectionIntoView);
+}
+
+function applySelectionEdges(left, top, right, bottom) {
+    const nextLeft = Math.min(left, right - 1);
+    const nextTop = Math.min(top, bottom - 1);
+    applySelectionRect(nextLeft, nextTop, Math.max(1, right - nextLeft), Math.max(1, bottom - nextTop));
 }
 
 function moveOverlayByPixels(dx, dy) {
     if (!sourcePreview) {
         return;
     }
-    const maxX = Math.max(0, sourcePreview.naturalWidth - config.gridW - config.gapRight);
-    const maxY = Math.max(0, sourcePreview.naturalHeight - config.gridH - config.gapBottom);
-    const minX = Math.max(0, config.gapLeft);
-    const minY = Math.max(0, config.gapTop);
-    const nextX = Math.min(Math.max(overlayOrigin.x + dx, minX), maxX);
-    const nextY = Math.min(Math.max(overlayOrigin.y + dy, minY), maxY);
-    overlayOrigin = { x: nextX, y: nextY };
-    updateSelectionBoxFromOrigin();
-}
-
-function setOverlayOriginFromEvent(event) {
-    const point = getImagePoint(event);
-    if (!point) {
-        return;
-    }
-    const scaleX = sourcePreview.naturalWidth / point.rect.width;
-    const scaleY = sourcePreview.naturalHeight / point.rect.height;
-    const maxX = Math.max(0, sourcePreview.naturalWidth - config.gridW - config.gapRight);
-    const maxY = Math.max(0, sourcePreview.naturalHeight - config.gridH - config.gapBottom);
-    const minX = Math.max(0, config.gapLeft);
-    const minY = Math.max(0, config.gapTop);
-    const targetX = Math.min(Math.max(point.x * scaleX - config.gridW / 2, minX), maxX);
-    const targetY = Math.min(Math.max(point.y * scaleY - config.gridH / 2, minY), maxY);
-    overlayOrigin = { x: targetX, y: targetY };
-    updateSelectionBoxFromOrigin();
+    const origin = getTileOrigin();
+    const nextX = clamp(origin.x + dx, 0, Math.max(0, sourcePreview.naturalWidth - config.gridW));
+    const nextY = clamp(origin.y + dy, 0, Math.max(0, sourcePreview.naturalHeight - config.gridH));
+    setFieldValue('rahmenLeft', Math.max(0, Math.round(nextX) - config.gapLeft));
+    setFieldValue('rahmenTop', Math.max(0, Math.round(nextY) - config.gapTop));
+    scheduleRender(true);
 }
 
 function beginSelection(event) {
-    if (!isListViewSelected()) {
+    if (!sourcePreview || event.button !== 0) {
         return;
     }
     const point = getImagePoint(event);
-    if (!point || !selectionBox) {
+    if (!point) {
         return;
     }
-    isSelecting = true;
+    activePointerMode = 'select';
     selectionStart = point;
-    selectionBox.style.display = 'block';
-    updateSelectionBox(point, point);
+    updateDragBox(point, point);
 }
 
 function moveSelection(event) {
-    if (!isSelecting || !selectionStart) {
+    if (activePointerMode !== 'select' || !selectionStart) {
         return;
     }
     const point = getImagePoint(event);
     if (!point) {
         return;
     }
-    updateSelectionBox(selectionStart, point);
+    updateDragBox(selectionStart, point);
 }
 
 function endSelection(event) {
-    if (!isSelecting || !selectionStart) {
+    if (activePointerMode !== 'select' || !selectionStart) {
         return;
     }
     const point = getImagePoint(event);
-    isSelecting = false;
-    if (selectionBox) {
-        selectionBox.style.display = 'none';
+    if (dragBox) {
+        dragBox.style.display = 'none';
     }
+    activePointerMode = null;
+    if (!point) {
+        selectionStart = null;
+        return;
+    }
+    const width = Math.abs(point.naturalX - selectionStart.naturalX);
+    const height = Math.abs(point.naturalY - selectionStart.naturalY);
+    if (width < MIN_SELECTION_PIXELS && height < MIN_SELECTION_PIXELS) {
+        applySelectionRect(point.naturalX, point.naturalY, config.gridW, config.gridH);
+        selectionStart = null;
+        return;
+    }
+    const left = Math.min(selectionStart.naturalX, point.naturalX);
+    const top = Math.min(selectionStart.naturalY, point.naturalY);
+    applySelectionRect(left, top, Math.max(1, width), Math.max(1, height));
+    selectionStart = null;
+}
+
+function beginResize(event, handle) {
+    if (!sourcePreview || event.button !== 0) {
+        return;
+    }
+    const point = getImagePoint(event);
     if (!point) {
         return;
     }
-    const width = Math.abs(point.x - selectionStart.x);
-    const height = Math.abs(point.y - selectionStart.y);
-    if (width < 1 || height < 1) {
-        setOverlayOriginFromEvent(event);
+    const edges = getSelectionEdges();
+    activePointerMode = 'resize';
+    resizeState = {
+        handle,
+        startPoint: point,
+        startEdges: edges
+    };
+    selectionBox.classList.add('is-resizing');
+}
+
+function moveResize(event) {
+    if (activePointerMode !== 'resize' || !resizeState) {
         return;
     }
-    const scaleX = sourcePreview.naturalWidth / point.rect.width;
-    const scaleY = sourcePreview.naturalHeight / point.rect.height;
-    const nextGridW = Math.max(1, Math.round(width * scaleX));
-    const nextGridH = Math.max(1, Math.round(height * scaleY));
-    if (gridWInput) gridWInput.value = String(nextGridW);
-    if (gridHInput) gridHInput.value = String(nextGridH);
-    updateConfigFromInputs();
-    if (selectionBox) {
-        selectionBox.style.display = 'block';
+    const point = getImagePoint(event);
+    if (!point) {
+        return;
     }
+    const deltaX = point.naturalX - resizeState.startPoint.naturalX;
+    const deltaY = point.naturalY - resizeState.startPoint.naturalY;
+    let { left, top, right, bottom } = resizeState.startEdges;
+    if (resizeState.handle.includes('w')) {
+        left = clamp(left + deltaX, 0, right - 1);
+    }
+    if (resizeState.handle.includes('e')) {
+        right = clamp(right + deltaX, left + 1, sourcePreview.naturalWidth);
+    }
+    if (resizeState.handle.includes('n')) {
+        top = clamp(top + deltaY, 0, bottom - 1);
+    }
+    if (resizeState.handle.includes('s')) {
+        bottom = clamp(bottom + deltaY, top + 1, sourcePreview.naturalHeight);
+    }
+    const nextLeft = Math.round(left);
+    const nextTop = Math.round(top);
+    const nextWidth = Math.max(1, Math.round(right - left));
+    const nextHeight = Math.max(1, Math.round(bottom - top));
+    setFieldValue('gridW', nextWidth);
+    setFieldValue('gridH', nextHeight);
+    setFieldValue('rahmenLeft', Math.max(0, nextLeft - config.gapLeft));
+    setFieldValue('rahmenTop', Math.max(0, nextTop - config.gapTop));
+    refreshInspector();
+}
+
+function beginOverlayAdjust(event, kind, side) {
+    if (!sourcePreview || event.button !== 0) {
+        return;
+    }
+    const point = getImagePoint(event);
+    if (!point) {
+        return;
+    }
+    activePointerMode = 'overlay-adjust';
+    overlayAdjustState = {
+        kind,
+        side,
+        startPoint: point,
+        startValue: getOverlayValue(kind, side)
+    };
+    const element = event.currentTarget;
+    if (element) {
+        element.classList.add('is-dragging');
+    }
+}
+
+function moveOverlayAdjust(event) {
+    if (activePointerMode !== 'overlay-adjust' || !overlayAdjustState) {
+        return;
+    }
+    const point = getImagePoint(event);
+    if (!point) {
+        return;
+    }
+    const deltaX = point.naturalX - overlayAdjustState.startPoint.naturalX;
+    const deltaY = point.naturalY - overlayAdjustState.startPoint.naturalY;
+    let nextValue = overlayAdjustState.startValue;
+    if (overlayAdjustState.kind === 'frame') {
+        if (overlayAdjustState.side === 'left') {
+            nextValue = overlayAdjustState.startValue + deltaX;
+        } else if (overlayAdjustState.side === 'right') {
+            nextValue = overlayAdjustState.startValue - deltaX;
+        } else if (overlayAdjustState.side === 'top') {
+            nextValue = overlayAdjustState.startValue + deltaY;
+        } else if (overlayAdjustState.side === 'bottom') {
+            nextValue = overlayAdjustState.startValue - deltaY;
+        }
+    } else {
+        if (overlayAdjustState.side === 'left') {
+            nextValue = overlayAdjustState.startValue - deltaX;
+        } else if (overlayAdjustState.side === 'right') {
+            nextValue = overlayAdjustState.startValue + deltaX;
+        } else if (overlayAdjustState.side === 'top') {
+            nextValue = overlayAdjustState.startValue - deltaY;
+        } else if (overlayAdjustState.side === 'bottom') {
+            nextValue = overlayAdjustState.startValue + deltaY;
+        }
+    }
+    const limit = getOverlayLimit(overlayAdjustState.kind, overlayAdjustState.side);
+    setOverlayValue(overlayAdjustState.kind, overlayAdjustState.side, clamp(Math.round(nextValue), 0, limit));
+    refreshInspector();
 }
 
 function renderRandomView() {
@@ -622,6 +1002,45 @@ function renderRandomView() {
     }
 }
 
+function normalizeConfigForImage() {
+    if (!myImage.complete || myImage.naturalWidth === 0 || myImage.naturalHeight === 0) {
+        return;
+    }
+    const maxWidth = Math.max(1, myImage.naturalWidth);
+    const maxHeight = Math.max(1, myImage.naturalHeight);
+    const nextGridW = clamp(config.gridW, 1, maxWidth);
+    const nextGridH = clamp(config.gridH, 1, maxHeight);
+    if (nextGridW !== config.gridW) {
+        setFieldValue('gridW', nextGridW);
+    }
+    if (nextGridH !== config.gridH) {
+        setFieldValue('gridH', nextGridH);
+    }
+    const origin = getTileOrigin();
+    const nextOriginX = clamp(origin.x, 0, Math.max(0, maxWidth - config.gridW));
+    const nextOriginY = clamp(origin.y, 0, Math.max(0, maxHeight - config.gridH));
+    const nextFrameLeft = Math.max(0, nextOriginX - config.gapLeft);
+    const nextFrameTop = Math.max(0, nextOriginY - config.gapTop);
+    if (nextFrameLeft !== config.rahmenLeft) {
+        setFieldValue('rahmenLeft', nextFrameLeft);
+    }
+    if (nextFrameTop !== config.rahmenTop) {
+        setFieldValue('rahmenTop', nextFrameTop);
+    }
+    ['left', 'right', 'top', 'bottom'].forEach(function (side) {
+        const frameValue = getOverlayValue('frame', side);
+        const gapValue = getOverlayValue('gap', side);
+        const frameLimit = getOverlayLimit('frame', side);
+        const gapLimit = getOverlayLimit('gap', side);
+        if (frameValue !== clamp(frameValue, 0, frameLimit)) {
+            setOverlayValue('frame', side, clamp(frameValue, 0, frameLimit));
+        }
+        if (gapValue !== clamp(gapValue, 0, gapLimit)) {
+            setOverlayValue('gap', side, clamp(gapValue, 0, gapLimit));
+        }
+    });
+}
+
 function renderFontPreview(shouldUpdateTicker = true) {
     const viewMode = getViewMode();
     const previewMode = getPreviewMode();
@@ -632,6 +1051,7 @@ function renderFontPreview(shouldUpdateTicker = true) {
     if (!myImage.complete || myImage.naturalWidth === 0) {
         return;
     }
+    normalizeConfigForImage();
     updatePreviewLayout();
     const showListView = viewMode === 'list';
     const showScrollerPreview = viewMode === 'preview' && previewMode === 'scrollers';
@@ -758,11 +1178,23 @@ viewTabs.forEach(function (tab) {
     tab.addEventListener('click', function () {
         setActiveView(tab.dataset.view || 'list');
         scheduleRender(false);
-        if (selectionBox) {
-            selectionBox.style.display = 'none';
+        activePointerMode = null;
+        selectionStart = null;
+        resizeState = null;
+        overlayAdjustState = null;
+        if (dragBox) {
+            dragBox.style.display = 'none';
         }
-        isSelecting = false;
-        isDraggingOverlay = false;
+        if (selectionBox) {
+            selectionBox.classList.remove('is-dragging');
+            selectionBox.classList.remove('is-resizing');
+        }
+        offsetOverlays.forEach(function (overlay) {
+            if (overlay.element) {
+                overlay.element.classList.remove('is-dragging');
+            }
+        });
+        hideHoverTooltip();
     });
 });
 if (previewModeSelect) {
@@ -783,9 +1215,9 @@ if (tickerToggleButton) {
         setTickerRunning(config.tickerRunning);
     });
 }
-if (zoomOutButton) zoomOutButton.addEventListener('click', function () { updateZoom(-0.1); });
+if (zoomOutButton) zoomOutButton.addEventListener('click', function () { updateZoom(-0.25); });
 if (zoomResetButton) zoomResetButton.addEventListener('click', function () { config.zoom = 1; applyZoom(); });
-if (zoomInButton) zoomInButton.addEventListener('click', function () { updateZoom(0.1); });
+if (zoomInButton) zoomInButton.addEventListener('click', function () { updateZoom(0.25); });
 if (saveSettingsButton) {
     saveSettingsButton.addEventListener('click', function () {
         const baseName = getBaseName(currentImageName);
@@ -833,28 +1265,56 @@ if (sourcePreview) {
     sourcePreview.addEventListener('mousedown', beginSelection);
 }
 if (selectionBox) {
+    selectionBox.querySelectorAll('[data-resize-handle]').forEach(function (handle) {
+        handle.addEventListener('mousedown', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            beginResize(event, handle.dataset.resizeHandle || '');
+        });
+    });
     selectionBox.addEventListener('mousedown', function (event) {
         event.preventDefault();
-        isDraggingOverlay = true;
+        event.stopPropagation();
+        activePointerMode = 'move';
+        selectionBox.classList.add('is-dragging');
         const point = getImagePoint(event);
         if (!point) {
             return;
         }
-        const scaleX = sourcePreview.naturalWidth / point.rect.width;
-        const scaleY = sourcePreview.naturalHeight / point.rect.height;
+        const origin = getTileOrigin();
         dragOffset = {
-            x: point.x * scaleX - overlayOrigin.x,
-            y: point.y * scaleY - overlayOrigin.y
+            x: point.naturalX - origin.x,
+            y: point.naturalY - origin.y
         };
     });
 }
+offsetOverlays.forEach(function (overlay) {
+    if (!overlay.element) {
+        return;
+    }
+    overlay.element.addEventListener('mousedown', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        beginOverlayAdjust(event, overlay.kind, overlay.side);
+    });
+    overlay.element.addEventListener('mouseenter', function (event) {
+        showHoverTooltip(event, `${overlay.kind}-${overlay.side}`);
+    });
+    overlay.element.addEventListener('mousemove', function (event) {
+        if (hoverTooltip && hoverTooltip.style.display === 'block') {
+            hoverTooltip.style.left = `${Math.round(event.offsetX + 12)}px`;
+            hoverTooltip.style.top = `${Math.round(event.offsetY + 12)}px`;
+        }
+    });
+    overlay.element.addEventListener('mouseleave', hideHoverTooltip);
+});
 document.addEventListener('mousemove', moveSelection);
 document.addEventListener('mouseup', endSelection);
 document.addEventListener('keydown', function (event) {
     if (event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.tagName === 'SELECT' || event.target.isContentEditable)) {
         return;
     }
-    if (!isListViewSelected()) {
+    if (getViewMode() === 'help') {
         return;
     }
     const stepX = event.ctrlKey ? config.gridW : (event.shiftKey ? 10 : 1);
@@ -873,6 +1333,15 @@ document.addEventListener('keydown', function (event) {
         moveOverlayByPixels(0, stepY);
     }
 });
+if (inspectorViewport) {
+    inspectorViewport.addEventListener('wheel', function (event) {
+        if (!event.ctrlKey && !event.metaKey) {
+            return;
+        }
+        event.preventDefault();
+        updateZoom(event.deltaY < 0 ? 0.25 : -0.25);
+    }, { passive: false });
+}
 
 function enforceNumberMaxLength(input) {
     if (!input) {
@@ -928,25 +1397,46 @@ function renderHelpView() {
     setViewVisibility('help');
 }
 document.addEventListener('mousemove', function (event) {
-    if (!isDraggingOverlay || !dragOffset) {
+    if (activePointerMode !== 'move' || !dragOffset) {
         return;
     }
     const point = getImagePoint(event);
     if (!point) {
         return;
     }
-    const scaleX = sourcePreview.naturalWidth / point.rect.width;
-    const scaleY = sourcePreview.naturalHeight / point.rect.height;
     const maxX = Math.max(0, sourcePreview.naturalWidth - config.gridW);
     const maxY = Math.max(0, sourcePreview.naturalHeight - config.gridH);
-    const targetX = Math.min(Math.max(point.x * scaleX - dragOffset.x, 0), maxX);
-    const targetY = Math.min(Math.max(point.y * scaleY - dragOffset.y, 0), maxY);
-    overlayOrigin = { x: targetX, y: targetY };
-    updateSelectionBoxFromOrigin();
+    const targetX = clamp(point.naturalX - dragOffset.x, 0, maxX);
+    const targetY = clamp(point.naturalY - dragOffset.y, 0, maxY);
+    setFieldValue('rahmenLeft', Math.max(0, Math.round(targetX) - config.gapLeft));
+    setFieldValue('rahmenTop', Math.max(0, Math.round(targetY) - config.gapTop));
+    refreshInspector();
 });
+document.addEventListener('mousemove', moveResize);
+document.addEventListener('mousemove', moveOverlayAdjust);
 document.addEventListener('mouseup', function () {
-    isDraggingOverlay = false;
+    if (activePointerMode === 'move') {
+        scheduleRender(true);
+    }
+    if (activePointerMode === 'resize') {
+        scheduleRender(true);
+    }
+    if (activePointerMode === 'overlay-adjust') {
+        scheduleRender(true);
+    }
+    activePointerMode = null;
     dragOffset = null;
+    resizeState = null;
+    overlayAdjustState = null;
+    if (selectionBox) {
+        selectionBox.classList.remove('is-dragging');
+        selectionBox.classList.remove('is-resizing');
+    }
+    offsetOverlays.forEach(function (overlay) {
+        if (overlay.element) {
+            overlay.element.classList.remove('is-dragging');
+        }
+    });
 });
 
 syncInputsToConfig();

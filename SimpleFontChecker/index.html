@@ -125,8 +125,36 @@
         </div>
       </div>
       <div class="preview">
-        <div id="selectionBox" class="selection-box"></div>
-        <img id="source" src="font.png" />
+        <div class="preview-info">
+          Drag to define a tile. Drag the green tile to move it. Drag red frame strips or blue gap strips to adjust offsets. Scroll to pan after zooming.
+        </div>
+        <div id="inspectorViewport" class="inspector-viewport">
+          <div id="inspectorSurface" class="inspector-surface">
+            <img id="source" src="font.png" />
+            <canvas id="gridOverlay" class="grid-overlay" aria-hidden="true"></canvas>
+            <div id="frameTopOverlay" class="offset-overlay frame-overlay frame-top" data-overlay-kind="frame" data-overlay-side="top"></div>
+            <div id="frameRightOverlay" class="offset-overlay frame-overlay frame-right" data-overlay-kind="frame" data-overlay-side="right"></div>
+            <div id="frameBottomOverlay" class="offset-overlay frame-overlay frame-bottom" data-overlay-kind="frame" data-overlay-side="bottom"></div>
+            <div id="frameLeftOverlay" class="offset-overlay frame-overlay frame-left" data-overlay-kind="frame" data-overlay-side="left"></div>
+            <div id="gapTopOverlay" class="offset-overlay gap-overlay gap-top" data-overlay-kind="gap" data-overlay-side="top"></div>
+            <div id="gapRightOverlay" class="offset-overlay gap-overlay gap-right" data-overlay-kind="gap" data-overlay-side="right"></div>
+            <div id="gapBottomOverlay" class="offset-overlay gap-overlay gap-bottom" data-overlay-kind="gap" data-overlay-side="bottom"></div>
+            <div id="gapLeftOverlay" class="offset-overlay gap-overlay gap-left" data-overlay-kind="gap" data-overlay-side="left"></div>
+            <div id="selectionBox" class="selection-box">
+              <div class="resize-handle handle-n" data-resize-handle="n"></div>
+              <div class="resize-handle handle-ne" data-resize-handle="ne"></div>
+              <div class="resize-handle handle-e" data-resize-handle="e"></div>
+              <div class="resize-handle handle-se" data-resize-handle="se"></div>
+              <div class="resize-handle handle-s" data-resize-handle="s"></div>
+              <div class="resize-handle handle-sw" data-resize-handle="sw"></div>
+              <div class="resize-handle handle-w" data-resize-handle="w"></div>
+              <div class="resize-handle handle-nw" data-resize-handle="nw"></div>
+            </div>
+            <div id="dragBox" class="drag-box"></div>
+            <div id="hoverTooltip" class="hover-tooltip" role="status" aria-live="polite"></div>
+          </div>
+        </div>
+        <div id="inspectorStatus" class="inspector-status"></div>
       </div>
       <div id="helpView" class="help-view">
         <h2>Help</h2>
@@ -143,7 +171,13 @@
           <li><strong>Tile Limit:</strong> Limit how many tiles are shown/used (0 = no limit).</li>
           <li><strong>Ignore Chars:</strong> Comma-separated tile indices to skip.</li>
           <li><strong>Save/Load Settings:</strong> Store or restore your current setup.</li>
-          <li><strong>Selection:</strong> In Character List view, click the image to set the grid box and use arrows to nudge it.</li>
+          <li><strong>Selection:</strong> Drag on the source image to define a tile, drag the green tile to move it, resize it from any side, and drag red or blue strips to adjust frame and gap offsets.</li>
+          <li><strong>Green Overlay:</strong> The green rectangle is the active tile area. Drag inside it to move the current tile origin.</li>
+          <li><strong>Resize Handles:</strong> Use the small green handles on the edges and corners to resize the tile area from any side.</li>
+          <li><strong>Red Overlays:</strong> Red strips represent frame offsets. Each side can be dragged directly when its frame value is greater than 0.</li>
+          <li><strong>Blue Overlays:</strong> Blue strips represent gap offsets. Each side can be dragged directly when its gap value is greater than 0.</li>
+          <li><strong>Hover Hints:</strong> Hover over red or blue strips to get a short description of what that helper controls.</li>
+          <li><strong>Zoomed Inspection:</strong> In zoomed mode the inspector stays full size and the page can scroll so you can inspect larger sprite sheets precisely.</li>
         </ul>
       </div>
     </div>
