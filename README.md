@@ -5,9 +5,7 @@ small scripts and tools to help with my pixelart projects
 
 ### Update 29.03.2026
 After seeing a friend struggling a bit with setting the values from hand, I added an more userfriendly grid to the editor. 
-You can zoom in or out and select a char with a green reactangl. You can grab it then and put the green overlay over the first char.
-If you need a gap between chars you can see them as a red overlay if you add manually more then just 1 px to that value (top,left,bottom,right)and you can resize it also in that direction.
-For the frame it is the same just with an blue overlay  fro each corner. 
+You can zoom in or out and select a char with a green rectangle. You can grab it then and put the green overlay over a char of your choice. if you have set it up and see the hand icon hovering over the green rectangle you can move that to the first char. That will set up char grid and if needed already the frame offset. for the gap you have manually set a value over 0px in any direction. With the colored overlays you can see gaps as a red overlay and the frame it is the same just with an blue overlay. 
 
 ### Update 27.12.2025
 
