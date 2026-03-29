@@ -3,7 +3,13 @@ small scripts and tools to help with my pixelart projects
 
 ## SimpleFontChecker
 
-### Small Update 27.12.2025
+### Update 29.03.2026
+After seeing a friend struggling a bit with setting the values from hand, I added an more userfriendly grid to the editor. 
+You can zoom in or out and select a char with a green reactangl. You can grab it then and put the green overlay over the first char.
+If you need a gap between chars you can see them as a red overlay if you add manually more then just 1 px to that value (top,left,bottom,right)and you can resize it also in that direction.
+For the frame it is the same just with an blue overlay  fro each corner. 
+
+### Update 27.12.2025
 
 Still a simple JavaScript Tool to check how a "bitmap font" looks "in real" with one char next to each other. 
 Shown on block or in scrollers, now.  
